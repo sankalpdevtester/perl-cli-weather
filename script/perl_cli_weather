@@ -1,0 +1,45 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Mojolicious::Lite;
+use HTTP::Request;
+use LWP::UserAgent;
+use JSON;
+use Env;
+
+# Load environment variables
+my $api_key = $ENV{OPENWEATHERMAP_API_KEY};
+my $units = $ENV{UNITS} || 'metric';
+
+# Define routes
+get '/weather' => sub {
+    my $c = shift;
+    my $location = $c->param('location');
+    my $ua = LWP::UserAgent->new;
+    my $request = HTTP::Request->new('GET', "http://api.openweathermap.org/data/2.5/weather?q=$location&appid=$api_key&units=$units");
+    my $response = $ua->request($request);
+    if ($response->is_success) {
+        my $json = JSON->new;
+        my $data = $json->decode($response->decoded_content);
+        $c->render(json => $data);
+    } else {
+        $c->render(text => 'Error: ' . $response->status_line, status => 500);
+    }
+};
+
+get '/forecast' => sub {
+    my $c = shift;
+    my $location = $c->param('location');
+    my $ua = LWP::UserAgent->new;
+    my $request = HTTP::Request->new('GET', "http://api.openweathermap.org/data/2.5/forecast?q=$location&appid=$api_key&units=$units");
+    my $response = $ua->request($request);
+    if ($response->is_success) {
+        my $json = JSON->new;
+        my $data = $json->decode($response->decoded_content);
+        $c->render(json => $data);
+    } else {
+        $c->render(text => 'Error: ' . $response->status_line, status => 500);
+    }
+};
+
+app->start;
