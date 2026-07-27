@@ -1,34 +1,32 @@
 package PerlCLIWeather::WeatherAlerts;
 
-use strict;
-use warnings;
 use Mojo::Base 'Mojolicious::Controller';
+use PerlCLIWeather::Config;
 use PerlCLIWeather::OpenWeatherMap;
 use PerlCLIWeather::Cache;
-use PerlCLIWeather::Config;
 
 sub new {
-    my ($self, $c) = @_;
-    $self = $c;
+    my $self = shift->SUPER::new(@_);
     return $self;
 }
 
 sub get_weather_alerts {
-    my ($self, $location) = @_;
+    my $self = shift;
+    my $location = shift;
 
     # Get OpenWeatherMap API key from config
-    my $api_key = PerlCLIWeather::Config->new->get_api_key;
+    my $api_key = PerlCLIWeather::Config->new->get_openweathermap_api_key;
 
-    # Create OpenWeatherMap API object
-    my $owm = PerlCLIWeather::OpenWeatherMap->new($api_key);
+    # Create OpenWeatherMap API client
+    my $openweathermap = PerlCLIWeather::OpenWeatherMap->new($api_key);
 
     # Get current weather conditions
-    my $weather_data = $owm->get_weather($location);
+    my $weather = $openweathermap->get_weather($location);
 
     # Check if there are any weather alerts
-    if ($weather_data->{alerts}) {
+    if ($weather->{alerts}) {
         my @alerts;
-        foreach my $alert (@{$weather_data->{alerts}}) {
+        foreach my $alert (@{$weather->{alerts}}) {
             push @alerts, {
                 event => $alert->{event},
                 description => $alert->{description},
@@ -36,26 +34,31 @@ sub get_weather_alerts {
                 end => $alert->{end},
             };
         }
-        return \@alerts;
+        return @alerts;
     } else {
-        return undef;
+        return [];
     }
 }
 
 sub notify_weather_alerts {
-    my ($self, $location, $alerts) = @_;
+    my $self = shift;
+    my $location = shift;
 
-    # Create a notification message
-    my $message = "Weather alerts for $location:\n";
-    foreach my $alert (@$alerts) {
-        $message .= "Event: $alert->{event}\n";
-        $message .= "Description: $alert->{description}\n";
-        $message .= "Start: $alert->{start}\n";
-        $message .= "End: $alert->{end}\n\n";
+    # Get weather alerts
+    my @alerts = $self->get_weather_alerts($location);
+
+    # Print weather alerts
+    if (@alerts) {
+        print "Weather Alerts for $location:\n";
+        foreach my $alert (@alerts) {
+            print "  - Event: $alert->{event}\n";
+            print "    Description: $alert->{description}\n";
+            print "    Start: $alert->{start}\n";
+            print "    End: $alert->{end}\n";
+        }
+    } else {
+        print "No weather alerts for $location.\n";
     }
-
-    # Print the notification message
-    print $message;
 }
 
 1;
@@ -65,25 +68,22 @@ sub notify_weather_alerts {
 # In lib/PerlCLIWeather/CLI.pm
 package PerlCLIWeather::CLI;
 
-use strict;
-use warnings;
 use Mojo::Base 'Mojolicious::Command';
-use PerlCLIWeather::Weather;
 use PerlCLIWeather::WeatherAlerts;
 
 sub call {
-    my ($self, $location) = @_;
+    my ($self, @args) = @_;
 
-    # Get weather data
-    my $weather = PerlCLIWeather::Weather->new->get_weather($location);
-
-    # Get weather alerts
-    my $weather_alerts = PerlCLIWeather::WeatherAlerts->new->get_weather_alerts($location);
-
-    # Notify weather alerts
-    if ($weather_alerts) {
-        PerlCLIWeather::WeatherAlerts->new->notify_weather_alerts($location, $weather_alerts);
-    }
+    # Add new command for weather alerts
+    my $app = $self->app;
+    $app->commands->add(
+        'weather-alerts' => sub {
+            my ($self, @args) = @_;
+            my $location = shift @args;
+            my $weather_alerts = PerlCLIWeather::WeatherAlerts->new;
+            $weather_alerts->notify_weather_alerts($location);
+        }
+    );
 }
 
 1;
